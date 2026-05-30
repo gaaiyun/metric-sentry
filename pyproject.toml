@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metric-sentry"
+version = "0.1.0"
+description = "Treat your business metrics like code: snapshot and diff metric definitions and computed values on every PR."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "gaaiyun" }]
+keywords = ["metrics", "data-quality", "data-diff", "analytics-engineering", "ci", "duckdb"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "duckdb>=0.10",
+    "duckdb-engine>=0.13",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+parquet = ["pyarrow>=14"]
+dev = ["pytest>=8.0", "pyarrow>=14"]
+
+[project.scripts]
+metric-sentry = "metric_sentry.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gaaiyun/Enterprise-BI-Platform"
+Repository = "https://github.com/gaaiyun/Enterprise-BI-Platform"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/metric_sentry"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]

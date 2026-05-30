@@ -1,0 +1,39 @@
+name: CI
+
+# 在向默认分支 push 或提交 PR 时，跑项目自带的 pytest 测试套件。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # 运行测试所需依赖（与 pyproject 的 dependencies 对齐，走轻路径）。
+          pip install \
+            pytest \
+            "duckdb>=0.10" \
+            "duckdb-engine>=0.13" \
+            "sqlalchemy>=2.0" \
+            "pydantic>=2.5" \
+            "pyyaml>=6.0" \
+            "typer>=0.12" \
+            "pyarrow>=14"
+
+      - name: Run tests
+        # pyproject 的 [tool.pytest.ini_options] 用 pythonpath=["src"] 暴露包；
+        # 这里用 -o addopts="" 清掉 ini 里的 addopts，避免引入额外插件依赖。
+        run: python -m pytest tests/ -o addopts=""

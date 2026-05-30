@@ -1,0 +1,40 @@
+# Example CI gate: block a PR when a metric's definition changes or its value
+# drifts beyond the tolerance declared in the contract.
+#
+# Copy this into your own data/analytics repo. The key step is `metric-sentry
+# ci`, which exits non-zero on a breach and fails the check.
+#
+# Assumptions you will adapt:
+#   * The golden snapshot (snapshots/golden.json) is committed to the repo and
+#     reviewed like code. Regenerate it on purpose with `metric-sentry run`
+#     when an intended metric change has been approved.
+#   * The metrics read from a database your CI can reach. The bundled sample
+#     uses a local DuckDB file, which needs no services.
+
+name: metric-sentry
+
+on:
+  pull_request:
+    paths:
+      - "metrics.yml"
+      - "snapshots/**"
+      - "**/*.sql"
+
+jobs:
+  metric-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install metric-sentry
+        run: pip install metric-sentry
+
+      # If your metrics read a warehouse, materialise / point at it here instead.
+      # The sample project ships a local DuckDB file, so nothing is needed.
+
+      - name: Gate metrics against the golden snapshot
+        run: metric-sentry ci --contract metrics.yml --baseline snapshots/golden.json

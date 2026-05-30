@@ -1,0 +1,41 @@
+# metric-sentry sample contract.
+# Three classic SaaS metrics computed off the bundled `orders` table.
+# `metric-sentry run` snapshots these; `metric-sentry diff` catches drift.
+suite: saas_sample
+database: sample.duckdb
+
+metrics:
+  - name: mrr
+    description: Monthly recurring revenue from active paid subscriptions.
+    owner: revenue-team
+    source: orders
+    grain: one row per subscription order
+    expression: sum(mrr)
+    filters:
+      - status = 'active'
+      - is_paid = true
+    dimensions: [region]
+    tolerance:
+      pct: 0.05          # MRR may drift 5% before we block a PR
+
+  - name: active_users
+    description: Distinct users with at least one active subscription.
+    owner: growth-team
+    source: orders
+    grain: one row per subscription order
+    expression: count(distinct user_id)
+    filters:
+      - status = 'active'
+    dimensions: [region]
+    tolerance:
+      abs: 10            # +/-10 users is noise
+
+  - name: conversion_rate
+    description: Share of signups on a paid plan.
+    owner: growth-team
+    source: orders
+    grain: one row per subscription order
+    expression: count(*) FILTER (WHERE is_paid) * 1.0 / count(*)
+    dimensions: [region]
+    tolerance:
+      pct: 0.02          # conversion is sensitive; 2% drift max

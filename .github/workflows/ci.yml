@@ -1,6 +1,8 @@
 name: CI
 
-# 在向默认分支 push 或提交 PR 时，跑项目自带的 pytest 测试套件。
+# 向 main push 或提 PR 时跑两件事：
+#   1. pytest 测试套件
+#   2. 一次 self-check —— 把样例项目跑通，再悄悄改个 filter，确认 `ci` 真能拦截并非零退出
 on:
   push:
     branches: [main]
@@ -10,7 +12,6 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -19,21 +20,49 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install (editable, with dev deps)
         run: |
           python -m pip install --upgrade pip
-          # 运行测试所需依赖（与 pyproject 的 dependencies 对齐，走轻路径）。
-          pip install \
-            pytest \
-            "duckdb>=0.10" \
-            "duckdb-engine>=0.13" \
-            "sqlalchemy>=2.0" \
-            "pydantic>=2.5" \
-            "pyyaml>=6.0" \
-            "typer>=0.12" \
-            "pyarrow>=14"
+          pip install -e ".[dev]"
 
       - name: Run tests
-        # pyproject 的 [tool.pytest.ini_options] 用 pythonpath=["src"] 暴露包；
-        # 这里用 -o addopts="" 清掉 ini 里的 addopts，避免引入额外插件依赖。
-        run: python -m pytest tests/ -o addopts=""
+        run: python -m pytest
+
+  self-check:
+    # 用工具测自己：装好后跑 init/run，制造一次定义漂移，断言 `ci` 以非零退出拦下它。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install metric-sentry
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Scaffold sample project and snapshot a golden baseline
+        run: |
+          metric-sentry init demo --rows 600
+          metric-sentry run --contract demo/metrics.yml --out demo/snapshots/golden.json
+
+      - name: Clean diff must pass (exit 0)
+        run: metric-sentry ci --contract demo/metrics.yml --baseline demo/snapshots/golden.json
+
+      - name: Inject a sneaky filter that quietly drops MRR
+        run: |
+          sed -i "s/      - is_paid = true/      - is_paid = true\n      - plan != 'enterprise'/" demo/metrics.yml
+          echo "--- tampered mrr filters ---"
+          grep -n "plan != 'enterprise'" demo/metrics.yml
+
+      - name: The gate must now BLOCK the change (expect non-zero exit)
+        run: |
+          if metric-sentry ci --contract demo/metrics.yml --baseline demo/snapshots/golden.json; then
+            echo "::error::metric-sentry ci returned 0 but the metric definition changed — the gate failed to block"
+            exit 1
+          else
+            echo "metric-sentry ci correctly blocked the silent filter change (non-zero exit)"
+          fi

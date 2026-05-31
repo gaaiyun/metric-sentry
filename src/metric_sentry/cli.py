@@ -14,7 +14,6 @@ All the real logic lives in the importable package so it is unit-testable.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import typer
@@ -50,7 +49,10 @@ def _load_suite(contract: Path) -> MetricSuite:
     except FileNotFoundError as exc:
         _err(str(exc))
         raise typer.Exit(code=2)
-    except (ValueError, Exception) as exc:  # noqa: BLE001 - surface readable error
+    except ValueError as exc:
+        # pydantic's ValidationError subclasses ValueError, so this also covers
+        # a malformed contract. typer.Exit is *not* caught here (it is not a
+        # ValueError), so control-flow exits raised above propagate correctly.
         _err(f"failed to parse {contract}: {exc}")
         raise typer.Exit(code=2)
 
